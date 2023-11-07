@@ -1,0 +1,204 @@
+---
+title: "Project Test"
+author: "Carl Patel"
+date: "7/22/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+emaData <- read.csv("dataSets/EMA_data.csv")
+cortisol <- read.csv("dataSets/Cortisol.csv")
+```
+
+```{r}
+theme_custom <- function(){ 
+    theme(
+      plot.title = element_text(color="black",
+                                size=20,
+                                face="bold",
+                                hjust = .5),
+      plot.subtitle = element_text(color="black",
+                                size=18,
+                                face="plain"),
+      axis.title = element_text(color="black",
+                                  size=15,
+                                  face="plain"),
+      axis.text = element_text(color="gray25",
+                               size=10,
+                               face="plain"),
+      axis.ticks = element_line(color = "lightgrey",
+                                size = 0.25),
+      panel.background = element_rect(fill = "white",
+                                      colour = "grey",
+                                      size = 0,
+                                      linetype = 'solid'),
+      panel.grid.major = element_line(size = 0.25,
+                                      linetype = 'solid',
+                                      colour = "lightgrey"),
+      panel.grid.minor = element_blank(),
+      )
+}
+```
+
+```{r}
+meanMarriage <- emaData
+meanMarriage$ID <- factor(meanMarriage$ID)
+meanMarriage$Trimester <- meanMarriage$Trimester + 1
+meanMarriage$Trimester <- factor(meanMarriage$Trimester)
+meanMarriage$maritalstatus <- factor(meanMarriage$maritalstatus)
+meanMarriage <- meanMarriage %>% 
+  group_by(Trimester, ID) %>% 
+  summarise(PercievedStressScore=mean(PercievedStressScore),
+            average_income,
+            maritalstatus,
+            .groups='keep') %>% 
+  unique()
+```
+
+```{r}
+meanCor <- cortisol
+meanCor$ID <- factor(meanCor$ID)
+meanCor$Trimester <- factor(meanCor$Trimester)
+levels(meanCor$Trimester) <- c("1", "2", "3")
+meanCor <- meanCor %>% 
+  group_by(Trimester, ID ) %>% 
+  summarise(Trimester, Cortisol=mean(Cortisol, na.rm=T), .groups='keep') %>% 
+  unique()
+```
+
+```{r include=FALSE}
+everything <- inner_join(meanCor, meanMarriage)
+```
+
+```{r}
+IDs <- everything %>% 
+  group_by(ID) %>% 
+  summarise(
+    Cortisol=mean(Cortisol),
+    PercievedStressScore=mean(PercievedStressScore),
+    average_income,
+    maritalstatus,
+    .groups='keep') %>% 
+  unique()
+```
+
+```{r}
+ggplot(unique(everything), aes(x=maritalstatus, y=average_income, fill=maritalstatus, color=maritalstatus)) +
+  geom_boxplot(alpha=0.2) +
+  labs(title = "Income Based on Marital Status",
+       x = "Marital Status",
+       y = "Average Income") +
+  scale_fill_manual(values=c("#002953", "#95d4f3")) +
+  scale_color_manual(values=c("#002953", "#95d4f3")) +
+  theme_custom() +
+  theme(legend.position = "none",
+        axis.line.y = element_line(color = "lightgrey", size = 0.25))
+```
+
+```{r}
+ggplot(IDs, aes(x=average_income, y=Cortisol)) +
+  geom_point() +
+  geom_smooth(se=F, method=lm, formula = 'y~x', color="#639BBE") +
+  labs(title = "Cortisol Levels vs. Average Income",
+       x = "Average Income",
+       y = "Cortisol") +
+  ylim(0, 1.5) +
+  theme_custom()
+```
+
+```{r}
+#library(kable)
+#library(kableExtra)
+fit <- lm(Cortisol~average_income, data=IDs)
+summary(fit)$coefficients
+confint(fit)
+```
+
+
+```{r}
+tricolors <- c("coral", "coral2", "coral4")
+
+ggplot(everything, aes(x=Trimester, y=Cortisol, color=Trimester, fill=Trimester))+
+  labs(title = "Cortisol Levels over Trimesters",
+       x = "Trimester",
+       y = "Cortisol") +
+  geom_boxplot(alpha=0.2) +
+  scale_color_manual(values=tricolors) +
+  scale_fill_manual(values=tricolors) +
+  theme_custom() +
+  theme(legend.position = "none",
+        axis.line = element_line(color = "lightgrey", size = 0.25))
+```
+
+```{r}
+for (i in levels(everything$Trimester)){
+  tempData <- filter(everything, Trimester==i)
+  
+  plot <- ggplot(tempData, aes(x=average_income, y=Cortisol, color=maritalstatus)) +
+    geom_point() +
+    geom_smooth(se=F, method=lm, formula = 'y~x', fullrange=T) +
+    labs(subtitle = sprintf("Trimester %s",i),
+         x = "Average Income",
+         y = "Cortisol",
+         color = "Marital Status") +
+    ylim(0, 1.5) +
+    xlim(0, 80000) +
+    scale_color_manual(values=c("#002953", "#95d4f3")) +
+    theme_custom() +
+    theme(plot.subtitle = element_text(color=tricolors[strtoi(i)]))
+  
+  print(plot)
+}
+
+fit2 <- lm(Cortisol~average_income+maritalstatus+Trimester, data=everything)
+print("Coefficients")
+summary(fit2)$coefficients
+
+print("Confidance")
+confint(fit2)
+```
+
+# --------- Test ---------
+
+```{r}
+for (i in levels(everything$Trimester)){
+  tempData <- filter(everything, Trimester==i)
+  
+  print(sprintf("Trimester %s",i))
+  married <- filter(tempData, maritalstatus=="Married")
+  print(sprintf("Married: %s", cor(married$average_income, married$Cortisol)))
+  
+  notmarried <- filter(tempData, maritalstatus=="Not married")
+  print(sprintf("Not Married: %s", cor(notmarried$average_income, notmarried$Cortisol)))
+}
+```
+
+```{r}
+d <- everything
+d <- filter(everything, Trimester==1 | Trimester==2)
+t.test(Cortisol~Trimester, alternative='two.sided', mu=0, data=d)
+d <- everything
+d <- filter(everything, Trimester==1 | Trimester==3)
+t.test(Cortisol~Trimester, alternative='two.sided', mu=0, data=d)
+d <- everything
+d <- filter(everything, Trimester==3 | Trimester==2)
+t.test(Cortisol~Trimester, alternative='two.sided', mu=0, data=d)
+```
+
+```{r}
+d <- everything
+summary(aov(Cortisol~Trimester, data=d))
+```
+
+```{r}
+d <- everything
+summary(aov(Cortisol~Trimester*average_income*maritalstatus, data=d))
+```
+

@@ -1,0 +1,67 @@
+---
+title: "Project"
+author: "Carl Patel"
+date: "7/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+emaData <- read.csv("dataSets/EMA_data.csv")
+```
+
+
+# Marriage
+```{r}
+maritalData <- emaData
+maritalData$maritalstatus <- factor(maritalData$maritalstatus)
+levels(maritalData$maritalstatus)
+
+notMarried <- maritalData
+notMarried <- filter(notMarried, maritalstatus=='Not married')
+notMarried$ID <- factor(notMarried$ID)
+
+```
+
+```{r}
+meanMarriage <- emaData
+meanMarriage$ID <- factor(meanMarriage$ID)
+meanMarriage$Trimester <- meanMarriage$Trimester + 1
+meanMarriage$Trimester <- factor(meanMarriage$Trimester)
+meanMarriage <- group_by(meanMarriage, Trimester, ID)
+meanMarriage <- summarise(meanMarriage, PercievedStressScore=mean(PercievedStressScore), average_income, .groups='keep')
+meanMarriage <- unique(meanMarriage)
+```
+
+
+```{r}
+for (i in levels(meanMarriage$Trimester)){
+  tempData <- filter(meanMarriage, Trimester==i)
+  
+  plot <- ggplot(tempData, aes(x=average_income, y=PercievedStressScore)) +
+    geom_point() +
+    geom_smooth(se=F, method=lm, formula = 'y~x') +
+    ggtitle(sprintf("Trimester %s",i)) +
+    xlab("Income") +
+    ylab("Stress") +
+    ylim(0, 3)
+  
+  fit <- lm(PercievedStressScore ~ average_income, data=tempData)
+  print(summary(fit))
+  
+  print(cor(tempData$average_income, tempData$PercievedStressScore))
+  
+  print(plot)
+}
+```
+
+```{r}
+d <- meanMarriage
+d <- filter(meanMarriage, Trimester==1 | Trimester==3)
+t.test(PercievedStressScore~Trimester, mu=0, data=d)
+```
+
